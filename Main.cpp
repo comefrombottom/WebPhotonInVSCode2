@@ -1,565 +1,217 @@
-# include <Siv3D.hpp> // OpenSiv3D v0.6.4
+# include <Siv3D.hpp> // Siv3D v0.6.15
 # include "Multiplayer_Photon.hpp"
 # include "PHOTON_APP_ID.SECRET"
 
-// ユーザ定義型
-struct MyData
-{
-	String word;
-
-	Point pos;
-
-	// シリアライズに対応させるためのメンバ関数を定義する
-	template <class Archive>
-	void SIV3D_SERIALIZE(Archive& archive)
+namespace EventCode {
+	enum : uint8
 	{
-		archive(word, pos);
-	}
-};
+		//イベントコードは1から199までの範囲を使う
+		sendWord = 1,
+		sendResult = 2,
+	};
+}
 
-enum EventCode : uint8
-{
-	IntEvent = 1,
-	StringEvent,
-	StringEvent2,
-	CustomDataTest1,
-	CustomDataTest2,
-	CustomDataTest3,
-	CustomDataTest4,
-	FallbackTest,
-};
-
-class MyNetwork : public Multiplayer_Photon
+class MyClient : public Multiplayer_Photon
 {
 public:
-
-	MyNetwork()
+	MyClient()
 	{
-		init(std::string(SIV3D_OBFUSCATE(PHOTON_APP_ID)), U"1.0", Console, Verbose::Yes, ConnectionProtocol::Wss);
+		init(std::string(SIV3D_OBFUSCATE(PHOTON_APP_ID)), U"1.0", Verbose::No);
 
-		RegisterEventCallback(EventCode::IntEvent, &MyNetwork::onIntEvent);
-		RegisterEventCallback(EventCode::StringEvent, &MyNetwork::onStringEvent);
-		RegisterEventCallback(EventCode::StringEvent2, &MyNetwork::onStringEvent2);
-		RegisterEventCallback(EventCode::CustomDataTest1, &MyNetwork::onCustomDataTest1);
-		RegisterEventCallback(EventCode::CustomDataTest2, &MyNetwork::onCustomDataTest2);
-		RegisterEventCallback(EventCode::CustomDataTest3, &MyNetwork::onCustomDataTest3);
-		RegisterEventCallback(EventCode::CustomDataTest4, &MyNetwork::onCustomDataTest4);
+		RegisterEventCallback(EventCode::sendWord, &MyClient::eventReceived_sendWord);
+		RegisterEventCallback(EventCode::sendResult, &MyClient::eventReceived_sendResult);
+
 	}
 
-	Optional<LocalPlayer> getLocalPlayerByName(StringView userName) const
-	{
-		for (const auto& player : getLocalPlayers())
-		{
-			if (player.userName == userName)
-			{
-				return player;
-			}
-		}
-		return none;
-	}
 
 private:
 
-	void onIntEvent(LocalPlayerID sender, int32 value)
+	//イベントを受信したらそれに応じた処理を行う
+
+	void eventReceived_sendWord([[maybe_unused]] LocalPlayerID playerID, const String& word)
 	{
-		debugLog(U"<<< IntEvent を受信: {}"_fmt(value));
+		ClearPrint();
+		Print << U"受け取った言葉:{} "_fmt(word);
 	}
 
-	void onStringEvent(LocalPlayerID sender, String value)
+	void eventReceived_sendResult([[maybe_unused]] LocalPlayerID playerID, const String& result)
 	{
-		debugLog(U"<<< StringEvent を受信: {}"_fmt(value));
+		Print << result;
 	}
 
-	void onStringEvent2(LocalPlayerID sender, String value)
+	void joinRoomEventAction(const LocalPlayer& newPlayer, [[maybe_unused]] const Array<LocalPlayerID>& playerIDs, bool isSelf) override
 	{
-		debugLog(U"<<< StringEvent2 を受信: {}"_fmt(value));
-	}
-
-	void onCustomDataTest1(LocalPlayerID sender) {
-		debugLog(U"<<< CustomDataTest1 を受信");
-	}
-
-	void onCustomDataTest2(LocalPlayerID sender, Array<double> a) {
-		debugLog(U"<<< CustomDataTest2 を受信: {}"_fmt(a));
-	}
-
-	void onCustomDataTest3(LocalPlayerID sender, Array<double>& a) {
-		debugLog(U"<<< CustomDataTest3 を受信: {}"_fmt(a));
-	}
-
-	void onCustomDataTest4(LocalPlayerID sender, Array<double>&& a) {
-		debugLog(U"<<< CustomDataTest4 を受信: {}"_fmt(a));
-	}
-
-	// シリアライズデータを受信したときに呼ばれる関数をオーバーライドしてカスタマイズする
-	void customEventAction(const LocalPlayerID playerID, const uint8 eventCode, Deserializer<MemoryViewReader>& reader) override
-	{
-		debugLog(U"<<< {} を受信"_fmt(eventCode));
-	}
-
-	void onRoomListUpdate() override
-	{
-		debugLog(U"onRoomListUpdate:");
-		debugLog(U"{}"_fmt(getRoomNameList()));
-		for (const auto& room : getRoomList())
-		{
-			debugLog(U"- name: {}"_fmt(room.name));
-			debugLog(U"- isOpen: {}"_fmt(room.isOpen));
-			debugLog(U"- stats: {} / {}"_fmt(room.playerCount, room.maxPlayers));
-			debugLog(U"- properties: {}"_fmt(Format(room.properties)));
-		}
+		
 	}
 };
 
+std::pair<String, String> randomHiraganaWordPair(size_t n,size_t change) {
+	static Array<String> hiragana = { U"あ", U"い", U"う", U"え", U"お", U"か", U"き", U"く", U"け", U"こ", U"さ", U"し", U"す", U"せ", U"そ", U"た", U"ち", U"つ", U"て", U"と", U"な", U"に", U"ぬ", U"ね", U"の", U"は", U"ひ", U"ふ", U"へ", U"ほ", U"ま", U"み", U"む", U"め", U"も", U"や", U"ゆ", U"よ", U"ら", U"り", U"る", U"れ", U"ろ", U"わ", U"を", U"ん" };
+
+	Array<size_t> indices;
+
+	for (auto i : step(n))
+	{
+		indices.push_back(Random<size_t>(0, hiragana.size() - 1));
+	}
+
+	Array<size_t> indices2 = indices;
+	Array<size_t> choiceIndex = step(n);
+	choiceIndex.shuffle();
+	for (auto i : step(change))
+	{
+		if (choiceIndex.size() <= i) break;
+		indices[choiceIndex[i]] = Random<size_t>(0, hiragana.size() - 1);
+	}
+
+	String result;
+
+	for (auto i : indices)
+	{
+		result += hiragana[i];
+	}
+
+	String result2;
+
+	for (auto i : indices2)
+	{
+		result2 += hiragana[i];
+	}
+
+	return { result,result2 };
+}
+
 void Main()
 {
-	Scene::Resize(1600, 1200);
-	Scene::SetResizeMode(ResizeMode::Keep);
+	MyClient client;
 
-	Window::SetStyle(WindowStyle::Sizable);
+	Font font(20);
 
-	MyNetwork network{};
+	TextEditState playerName(U"player" + ToHex(RandomUint8()));
 
-	TextEditState text{};
+	Array<LocalPlayerID> wolfID;
 
-	Font font{ 20 };
+	bool isGameStarted = false;
 
-	static constexpr int32 initX = 10;
-	static constexpr int32 initY = 10;
-	static constexpr int32 marginWidth = 10;
-	static constexpr int32 ButtonWidth = 380;
-	static constexpr int32 offsetX = marginWidth + ButtonWidth;
-	static constexpr int32 offsetY = 50;
+	String trueWord;
+	String wolfWord;
+
+	int32 wordSize = 5;
+	int32 changeSize = 2;
+
+	int32 wolfCount = 1;
 
 	while (System::Update())
 	{
-		network.update();
-
-		int x = initX;
-		int y = initY;
-
-		SimpleGUI::TextBox(text, { x, y }, ButtonWidth);
-
-# if not SIV3D_PLATFORM(WEB)
-		font(U"bytesIn: {}"_fmt(
-			network.getBytesIn()
-		)).drawAt(Rect{ x += offsetX, y, ButtonWidth, 40 }.center());
-
-		font(U"bytesOut: {}"_fmt(
-			network.getBytesOut()
-		)).drawAt(Rect{ x += offsetX, y, ButtonWidth, 40 }.center());
-# endif
-
-		if (SimpleGUI::Button(U"connect", { x = initX, y += offsetY }, ButtonWidth))
+		if (client.isActive())
 		{
-			network.connect(U"Siv", U"jp");
+			client.update();
 		}
+		else {
+			SimpleGUI::TextBox(playerName, Vec2(50, 50), 200);
 
-		if (SimpleGUI::Button(U"disconnect", { x += offsetX, y }, ButtonWidth))
-		{
-			network.disconnect();
-		}
-
-		if (SimpleGUI::Button(U"leaveRoom", { x += offsetX, y }, ButtonWidth))
-		{
-			network.leaveRoom(false);
-		}
-
-		if (SimpleGUI::Button(U"leaveRoom (rejoin)", { x += offsetX, y }, ButtonWidth))
-		{
-			network.leaveRoom(true);
-		}
-
-		if (SimpleGUI::Button(U"reconnect", { x = initX, y += offsetY }, ButtonWidth))
-		{
-			network.reconnectAndRejoin();
-		}
-
-		if (SimpleGUI::Button(U"stats", { x += offsetX, y }, ButtonWidth))
-		{
-			network.debugLog(U"serverTime: {}ms"_fmt(Format(network.getServerTimeMillisec())));
-			network.debugLog(U"serverTimeOffset: {}ms"_fmt(Format(network.getServerTimeOffsetMillisec())));
-			network.debugLog(U"ping: {}ms"_fmt(Format(network.getPingMillisec())));
-		}
-
-		if (SimpleGUI::Button(U"getPingInterval", { x += offsetX, y }, ButtonWidth))
-		{
-			network.debugLog(U"getPingInterval: {}ms"_fmt(network.getPingIntervalMillisec()));
-		}
-
-		if (SimpleGUI::Button(U"setPingInterval", { x += offsetX, y }, ButtonWidth))
-		{
-			Optional<int32> parse = ParseOpt<int32>(text.text);
-			if (parse)
+			if (SimpleGUI::Button(U"Connect", Vec2(50, 100)))
 			{
-				network.debugLog(U"setPingInterval: {}ms"_fmt(parse.value()));
-				network.setPingIntervalMillisec(parse.value());
-			}
-			else
-			{
-				network.debugLog(U"setPingInterval: invalid value");
+				client.connect(playerName.text, U"jp");
 			}
 		}
 
-		if (SimpleGUI::Button(U"joinRandomOrCreateRoom", { x = initX, y += offsetY }, ButtonWidth))
+		if (client.isInLobby())
 		{
-			network.joinRandomOrCreateRoom(
-				text.text,
-				RoomCreateOption().maxPlayers(2)
-			);
+			client.joinRandomOrCreateRoom(U"");
 		}
 
-		if (SimpleGUI::Button(U"joinOrCreateRoom", { x += offsetX, y }, ButtonWidth))
+		if (client.isInRoom())
 		{
-			network.joinOrCreateRoom(
-				text.text,
-				RoomCreateOption().maxPlayers(2)
-			);
+			Scene::Rect().draw(Palette::Sienna);
+
+			if (client.isHost()) {
+				if (not isGameStarted) {
+					{
+						double wordSize_d = wordSize;
+						if (SimpleGUI::Slider(U"word:{}"_fmt(wordSize), wordSize_d, 1, 10, Vec2(550, 100),100)) {
+							wordSize = static_cast<int32>(wordSize_d);
+						}
+					}
+					{
+						double changeSize_d = changeSize;
+						if (SimpleGUI::Slider(U"change:{}"_fmt(changeSize), changeSize_d, 1, 10, Vec2(550, 150),100)) {
+							changeSize = static_cast<int32>(changeSize_d);
+						}
+					}
+					{
+						double wolfCount_d = wolfCount;
+						if (SimpleGUI::Slider(U"wolf:{}"_fmt(wolfCount), wolfCount_d, 1, client.getPlayerCountInCurrentRoom(), Vec2(550, 200), 100)) {
+							wolfCount = static_cast<int32>(wolfCount_d);
+						}
+					}
+
+
+					if (SimpleGUI::Button(U"Start Game", Vec2(620,30))) {
+						isGameStarted = true;
+
+						auto ws = randomHiraganaWordPair(5, 2);
+						trueWord = ws.first;
+						wolfWord = ws.second;
+
+						auto playerIDs = client.getLocalPlayerIDs();
+						wolfID = playerIDs.choice(wolfCount);
+
+						for (auto id : playerIDs) {
+							if (wolfID.contains(id)) {
+								client.sendEvent({ EventCode::sendWord, {id} }, wolfWord);
+							}
+							else {
+								client.sendEvent({ EventCode::sendWord, {id} }, trueWord);
+							}
+						}
+
+					}
+				}
+				else {
+					if (SimpleGUI::Button(U"End Game", Vec2(620, 30))) {
+						isGameStarted = false;
+						String wolfNames;
+
+						for (auto id : wolfID) {
+							wolfNames += U"\n";
+							wolfNames += client.getLocalPlayer(id).userName;
+						}
+						client.sendEvent({ EventCode::sendResult, ReceiverOption::All }, U"result:\n人狼は:{}\n村の言葉:{}\n人狼の言葉:{}"_fmt(wolfNames, trueWord, wolfWord));
+					}
+
+				}
+
+				
+			}
+
+			//プレイヤー名
+
+			font(U"プレイヤーリスト").draw(300, 10);
+			for (auto [i,player] : Indexed(client.getLocalPlayers())) {
+				if (client.getLocalPlayerID() == player.localID) {
+					font(player.userName + U"(自分)").draw(300, 40 + i * 30);
+				}
+				else{
+					font(player.userName).draw(300, 40 + i * 30);
+				}
+			}
+
 		}
 
-		if (SimpleGUI::Button(U"createRoom", { x += offsetX, y }, ButtonWidth))
-		{
-			network.createRoom(
-				text.text,
-				RoomCreateOption().maxPlayers(2).rejoinGracePeriod(none)
-			);
-		}
-
-		if (SimpleGUI::Button(U"joinRoom", { x += offsetX, y }, ButtonWidth))
-		{
-			network.joinRoom(text.text);
-		}
-
-		if (SimpleGUI::Button(U"joinRandomRoom", { x = initX, y += offsetY }, ButtonWidth))
-		{
-			network.joinRandomRoom();
-		}
-
-		if (SimpleGUI::Button(U"joinEventTargetGroup 1", { x = initX, y += offsetY }, ButtonWidth))
-		{
-			network.joinEventTargetGroup(1);
-		}
-
-		if (SimpleGUI::Button(U"joinEventTargetGroup 2, 3", { x += offsetX, y }, ButtonWidth))
-		{
-			network.joinEventTargetGroup({ 2, 3 });
-		}
-
-		if (SimpleGUI::Button(U"joinEventTargetGroup All", { x += offsetX, y }, ButtonWidth))
-		{
-			network.joinAllEventTargetGroups();
-		}
-
-		if (SimpleGUI::Button(U"leaveEventTargetGroup 1, 2", { x = initX, y += offsetY }, ButtonWidth))
-		{
-			network.leaveEventTargetGroup({ 1, 2 });
-		}
-
-		if (SimpleGUI::Button(U"leaveEventTargetGroup 3", { x += offsetX, y }, ButtonWidth))
-		{
-			network.joinEventTargetGroup(3);
-		}
-
-		if (SimpleGUI::Button(U"leaveEventTargetGroup All", { x += offsetX, y }, ButtonWidth))
-		{
-			network.leaveAllEventTargetGroups();
-		}
-
-		if (SimpleGUI::Button(U"sendEventTest 1, 2, 3, 4", { x = initX, y += offsetY }, ButtonWidth))
-		{
-			Array<double> arr{ 0.5, 1.0, 1.5 };
-			network.sendEvent(MultiplayerEvent(EventCode::CustomDataTest1));
-			network.sendEvent(MultiplayerEvent(EventCode::CustomDataTest2), arr);
-			network.sendEvent(MultiplayerEvent(EventCode::CustomDataTest3), arr);
-			network.sendEvent(MultiplayerEvent(EventCode::CustomDataTest4), arr);
-		}
-
-		if (SimpleGUI::Button(U"sendEventTest Fallback", { x += offsetX, y }, ButtonWidth))
-		{
-			Array<double> arr{ 0.5, 1.0, 1.5 };
-			network.sendEvent(MultiplayerEvent(EventCode::FallbackTest));
-		}
-
-		if (SimpleGUI::Button(U"sendEventTo TargetGroup 1, 2, 3, 4", { x += offsetX, y }, ButtonWidth))
-		{
-			network.sendEvent(MultiplayerEvent(EventCode::IntEvent, TargetGroup(1)), 1);
-			network.sendEvent(MultiplayerEvent(EventCode::IntEvent, TargetGroup(2)), 2);
-			network.sendEvent(MultiplayerEvent(EventCode::IntEvent, TargetGroup(3)), 3);
-			network.sendEvent(MultiplayerEvent(EventCode::IntEvent, TargetGroup(4)), 4);
-		}
-
-		if (SimpleGUI::Button(U"sendEventTo", { x = initX, y += offsetY }, ButtonWidth))
-		{
-			auto target = network.getLocalPlayerByName(text.text);
-			if (target)
-			{
-				network.sendEvent(MultiplayerEvent(EventCode::IntEvent, { target.value().localID }), 0);
+		if (not client.isDisconnected() and not client.isInRoom()) {
+			//ローディング画面
+			size_t t = static_cast<size_t>(Floor(fmod(Scene::Time() / 0.1, 8)));
+			for (size_t i : step(8)) {
+				Vec2 n = Circular(1, i * Math::TwoPi / 8);
+				Line(Scene::Center() + n * 10, Arg::direction(n * 10)).draw(LineStyle::RoundCap, 4, t == i ? ColorF(1, 0.9) : ColorF(1, 0.5));
 			}
 		}
 
-		if (SimpleGUI::Button(U"sendEvent toAll toHost", { x += offsetX, y }, ButtonWidth))
-		{
-			network.sendEvent(MultiplayerEvent(EventCode::StringEvent, ReceiverOption::All), String(U"ToAll"));
-			network.sendEvent(MultiplayerEvent(EventCode::StringEvent, ReceiverOption::Host), String(U"ToHost"));
-		}
-
-		if (SimpleGUI::Button(U"sendEvent Others_CacheUntilLeaveRoom", { x = initX, y += offsetY }, ButtonWidth))
-		{
-			network.sendEvent(MultiplayerEvent(EventCode::StringEvent, ReceiverOption::Others_CacheUntilLeaveRoom), String(U"Others_CacheUntilLeaveRoom"));
-		}
-
-		if (SimpleGUI::Button(U"sendEvent Others_CacheForever", { x += offsetX, y }, ButtonWidth))
-		{
-			network.sendEvent(MultiplayerEvent(EventCode::StringEvent, ReceiverOption::Others_CacheForever), String(U"Others_CacheForever"));
-		}
-
-		if (SimpleGUI::Button(U"sendEvent All_CacheUntilLeaveRoom", { x += offsetX, y }, ButtonWidth))
-		{
-			network.sendEvent(MultiplayerEvent(EventCode::StringEvent, ReceiverOption::All_CacheUntilLeaveRoom), String(U"All_CacheUntilLeaveRoom"));
-		}
-
-		if (SimpleGUI::Button(U"sendEvent All_CacheForever", { x += offsetX, y }, ButtonWidth))
-		{
-			network.sendEvent(MultiplayerEvent(EventCode::StringEvent, ReceiverOption::All_CacheForever), String(U"All_CacheForever"));
-		}
-
-		if (SimpleGUI::Button(U"sendEvent Others_CacheUntilLeaveRoom", { x = initX, y += offsetY }, ButtonWidth))
-		{
-			network.sendEvent(MultiplayerEvent(EventCode::StringEvent2, ReceiverOption::Others_CacheUntilLeaveRoom), String(U"Others_CacheUntilLeaveRoom2"));
-		}
-
-		if (SimpleGUI::Button(U"sendEvent Others_CacheForever", { x += offsetX, y }, ButtonWidth))
-		{
-			network.sendEvent(MultiplayerEvent(EventCode::StringEvent2, ReceiverOption::Others_CacheForever), String(U"Others_CacheForever2"));
-		}
-
-		if (SimpleGUI::Button(U"sendEvent All_CacheUntilLeaveRoom", { x += offsetX, y }, ButtonWidth))
-		{
-			network.sendEvent(MultiplayerEvent(EventCode::StringEvent2, ReceiverOption::All_CacheUntilLeaveRoom), String(U"All_CacheUntilLeaveRoom2"));
-		}
-
-		if (SimpleGUI::Button(U"sendEvent All_CacheForever", { x += offsetX, y }, ButtonWidth))
-		{
-			network.sendEvent(MultiplayerEvent(EventCode::StringEvent2, ReceiverOption::All_CacheForever), String(U"All_CacheForever2"));
-		}
-
-		if (SimpleGUI::Button(U"removeEventCache", { x = initX, y += offsetY }, ButtonWidth))
-		{
-			network.removeEventCache(EventCode::StringEvent);
-		}
-
-		if (SimpleGUI::Button(U"removeEventCache2", { x += offsetX, y }, ButtonWidth))
-		{
-			network.removeEventCache(EventCode::StringEvent2);
-		}
-
-		if (SimpleGUI::Button(U"removeEventCache All", { x += offsetX, y }, ButtonWidth))
-		{
-			network.removeEventCache(0);
-		}
-
-		if (SimpleGUI::Button(U"removeEventCache Of", { x += offsetX, y }, ButtonWidth))
-		{
-			auto target = network.getLocalPlayerByName(text.text);
-			if (target)
-			{
-				network.removeEventCache(EventCode::StringEvent, { target.value().localID });
+		if (client.isActive()) {
+			if (SimpleGUI::Button(U"Disconnect", Vec2(620, 550))) {
+				client.disconnect();
 			}
-		}
-
-		if (SimpleGUI::Button(U"getSelf", { x = initX, y += offsetY }, ButtonWidth))
-		{
-			auto player = network.getLocalPlayer();
-			network.debugLog(U"getSelf: ");
-			network.debugLog(U"- userName: {} ({})"_fmt(player.userName, network.getUserName()));
-			network.debugLog(U"- userID: {} ({})"_fmt(player.userID, network.getUserID()));
-			network.debugLog(U"- localID: {} ({})"_fmt(player.localID, network.getLocalPlayerID()));
-			network.debugLog(U"- isHost: {} ({})"_fmt(player.isHost, network.isHost()));
-			network.debugLog(U"- isActive: {}"_fmt(player.isActive));
-		}
-
-		if (SimpleGUI::Button(U"setName", { x += offsetX, y }, ButtonWidth))
-		{
-			network.setUserName(text.text);
-		}
-
-		if (SimpleGUI::Button(U"getHost", { x = initX, y += offsetY }, ButtonWidth))
-		{
-			auto hostID = network.getHostLocalPlayerID();
-			auto player = network.getLocalPlayer(hostID);
-			network.debugLog(U"getHost: ");
-			network.debugLog(U"- userName: {} {}"_fmt(player.userName, network.getUserName(hostID)));
-			network.debugLog(U"- userID: {} ({})"_fmt(player.userID, network.getUserID()));
-			network.debugLog(U"- localID: {} ({})"_fmt(player.localID, hostID));
-			network.debugLog(U"- isHost: {}"_fmt(player.isHost));
-			network.debugLog(U"- isActive: {}"_fmt(player.isActive));
-		}
-
-		if (SimpleGUI::Button(U"setHost", { x += offsetX, y }, ButtonWidth))
-		{
-			auto target = network.getLocalPlayerByName(text.text);
-			if (target)
-			{
-				network.debugLog(U"setHost: ");
-				network.setHost(target.value().localID);
-			}
-			else
-			{
-				network.debugLog(U"setHost: player not found");
-			}
-		}
-
-		if (SimpleGUI::Button(U"getRoom", { x = initX, y += offsetY }, ButtonWidth))
-		{
-			auto room = network.getCurrentRoom();
-			auto players = network.getLocalPlayers();
-			network.debugLog(U"getRoom: ");
-			network.debugLog(U"- name: {}"_fmt(room.name, network.getCurrentRoomName()));
-			network.debugLog(U"- isOpen: {}"_fmt(room.isOpen));
-			network.debugLog(U"- stats: {} / {}"_fmt(room.playerCount, room.maxPlayers));
-			network.debugLog(U"- properties: {}"_fmt(Format(room.properties)));
-			network.debugLog(U"- players:");
-			for (const auto& player : players)
-			{
-				network.debugLog(U"-- userName: {}"_fmt(player.userName));
-				network.debugLog(U"-- userID: {}"_fmt(player.userID));
-				network.debugLog(U"-- localID: {}"_fmt(player.localID));
-				network.debugLog(U"-- isHost: {}"_fmt(player.isHost));
-				network.debugLog(U"-- isActive: {}"_fmt(player.isActive));
-			}
-		}
-
-		if (SimpleGUI::Button(U"getLocalPlayerIDs", { x += offsetX, y }, ButtonWidth))
-		{
-			auto playerIDs = network.getLocalPlayerIDs();
-			network.debugLog(U"getLocalPlayerIDs: {}"_fmt(Format(playerIDs)));
-		}
-
-		if (SimpleGUI::Button(U"GetRoomProperties", { x = initX, y += offsetY }, ButtonWidth))
-		{
-			auto properties = network.getRoomProperties();
-			network.debugLog(U"GetRoomProperties: ");
-			network.debugLog(U"- properties: {}"_fmt(Format(properties)));
-		}
-
-		if (SimpleGUI::Button(U"SetRoomProperty 1", { x += offsetX, y }, ButtonWidth))
-		{
-			network.setRoomProperty(1, U"apple");
-		}
-
-		if (SimpleGUI::Button(U"SetRoomProperty 2", { x += offsetX, y }, ButtonWidth))
-		{
-			network.setRoomProperty(2, U"banana");
-		}
-
-		if (SimpleGUI::Button(U"SetRoomProperty 1 empty", { x = initX, y += offsetY }, ButtonWidth))
-		{
-			network.setRoomProperty(1, U"");
-		}
-
-		if (SimpleGUI::Button(U"SetRemoveRoomProperty 2 empty", { x += offsetX, y }, ButtonWidth))
-		{
-			network.setRoomProperty(2, U"");
-		}
-
-		if (SimpleGUI::Button(U"GetRoomPropertyByKey", { x = initX, y += offsetY }, ButtonWidth))
-		{
-			Optional<int32> parse = ParseOpt<int32>(text.text);
-			if (parse)
-			{
-				network.debugLog(U"GetRoomPropertyByKey");
-				network.debugLog(U"- {} : {}"_fmt(text.text, network.getRoomProperty(parse.value())));
-			}
-			else
-			{
-				network.debugLog(U"GetRoomPropertyByKey: integer required");
-			}
-		}
-
-		if (SimpleGUI::Button(U"SetIsOpenInCurrentRoom: true", { x = initX, y += offsetY }, ButtonWidth))
-		{
-			network.debugLog(U"SetIsOpenInCurrentRoom: true");
-			network.setIsOpenInCurrentRoom(true);
-		}
-
-		if (SimpleGUI::Button(U"SetIsOpenInCurrentRoom: false", { x += offsetX, y }, ButtonWidth))
-		{
-			network.debugLog(U"SetIsOpenInCurrentRoom: false");
-			network.setIsOpenInCurrentRoom(false);
-		}
-
-		if (SimpleGUI::Button(U"SetIsVisibleInCurrentRoom: true", { x += offsetX, y }, ButtonWidth))
-		{
-			network.debugLog(U"SetIsOpenInCurrentRoom: true");
-			network.setIsVisibleInCurrentRoom(true);
-		}
-
-		if (SimpleGUI::Button(U"SetIsVisibleInCurrentRoom: false", { x += offsetX, y }, ButtonWidth))
-		{
-			network.debugLog(U"SetIsOpenInCurrentRoom: false");
-			network.setIsVisibleInCurrentRoom(false);
-		}
-
-		{
-			String state{};
-
-			switch (network.getClientState())
-			{
-			case ClientState::Disconnected:
-				state = U"Disconnected";
-				break;
-			case ClientState::ConnectingToLobby:
-				state = U"ConnectingToLobby";
-				break;
-			case ClientState::InLobby:
-				state = U"InLobby";
-				break;
-			case ClientState::JoiningRoom:
-				state = U"JoiningRoom";
-				break;
-			case ClientState::InRoom:
-				state = U"InRoom";
-				break;
-			case ClientState::LeavingRoom:
-				state = U"LeavingRoom";
-				break;
-			case ClientState::Disconnecting:
-				state = U"Disconnecting";
-				break;
-			}
-
-			font(state).drawAt(Rect{ x = initX, y += offsetY, ButtonWidth, 40 }.center());
-		}
-
-		if (network.isInLobby())
-		{
-			font(U"Online: {}"_fmt(
-				network.getCountPlayersOnline()
-			)).drawAt(Rect{ x += offsetX, y, ButtonWidth, 40 }.center());
-
-			font(U"InGame: {}"_fmt(
-				network.getCountPlayersIngame()
-			)).drawAt(Rect{ x += offsetX, y, ButtonWidth, 40 }.center());
-
-			font(U"Room: {}"_fmt(
-				network.getCountGamesRunning()
-			)).drawAt(Rect{ x += offsetX, y, ButtonWidth, 40 }.center());
-		}
-		else if (network.isInRoom())
-		{
-			font(U"Room: {} [{} / {}]"_fmt(
-				network.getCurrentRoomName(),
-				network.getPlayerCountInCurrentRoom(),
-				network.getMaxPlayersInCurrentRoom()
-			)).drawAt(Rect{ x += offsetX, y, ButtonWidth, 40 }.center());
-
-			font(U"isOpen: {}"_fmt(
-				network.getIsOpenInCurrentRoom()
-			)).drawAt(Rect{ x += offsetX, y, ButtonWidth, 40 }.center());
-
-			font(U"isVisible: {}"_fmt(
-				network.getIsVisibleInCurrentRoom()
-			)).drawAt(Rect{ x += offsetX, y, ButtonWidth, 40 }.center());
 		}
 	}
 }
