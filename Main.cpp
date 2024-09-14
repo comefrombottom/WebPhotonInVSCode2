@@ -16,7 +16,7 @@ class MyClient : public Multiplayer_Photon
 public:
 	MyClient()
 	{
-		init(std::string(SIV3D_OBFUSCATE(PHOTON_APP_ID)), U"1.0", Verbose::No);
+		init(std::string(SIV3D_OBFUSCATE(PHOTON_APP_ID)), U"1.0", Verbose::No, ConnectionProtocol::Wss);
 
 		RegisterEventCallback(EventCode::sendWord, &MyClient::eventReceived_sendWord);
 		RegisterEventCallback(EventCode::sendResult, &MyClient::eventReceived_sendResult);
@@ -41,11 +41,11 @@ private:
 
 	void joinRoomEventAction(const LocalPlayer& newPlayer, [[maybe_unused]] const Array<LocalPlayerID>& playerIDs, bool isSelf) override
 	{
-		
+
 	}
 };
 
-std::pair<String, String> randomHiraganaWordPair(size_t n,size_t change) {
+std::pair<String, String> randomHiraganaWordPair(size_t n, size_t change) {
 	static Array<String> hiragana = { U"あ", U"い", U"う", U"え", U"お", U"か", U"き", U"く", U"け", U"こ", U"さ", U"し", U"す", U"せ", U"そ", U"た", U"ち", U"つ", U"て", U"と", U"な", U"に", U"ぬ", U"ね", U"の", U"は", U"ひ", U"ふ", U"へ", U"ほ", U"ま", U"み", U"む", U"め", U"も", U"や", U"ゆ", U"よ", U"ら", U"り", U"る", U"れ", U"ろ", U"わ", U"を", U"ん" };
 
 	Array<size_t> indices;
@@ -114,6 +114,8 @@ void Main()
 			{
 				client.connect(playerName.text, U"jp");
 			}
+
+			font(U"v0.3").draw(620, 550);
 		}
 
 		if (client.isInLobby())
@@ -129,13 +131,13 @@ void Main()
 				if (not isGameStarted) {
 					{
 						double wordSize_d = wordSize;
-						if (SimpleGUI::Slider(U"word:{}"_fmt(wordSize), wordSize_d, 1, 10, Vec2(550, 100),100)) {
+						if (SimpleGUI::Slider(U"word:{}"_fmt(wordSize), wordSize_d, 1, 10, Vec2(550, 100), 100)) {
 							wordSize = static_cast<int32>(wordSize_d);
 						}
 					}
 					{
 						double changeSize_d = changeSize;
-						if (SimpleGUI::Slider(U"change:{}"_fmt(changeSize), changeSize_d, 1, 10, Vec2(550, 150),100)) {
+						if (SimpleGUI::Slider(U"change:{}"_fmt(changeSize), changeSize_d, 1, 10, Vec2(550, 150), 100)) {
 							changeSize = static_cast<int32>(changeSize_d);
 						}
 					}
@@ -147,7 +149,7 @@ void Main()
 					}
 
 
-					if (SimpleGUI::Button(U"Start Game", Vec2(620,30))) {
+					if (SimpleGUI::Button(U"Start Game", Vec2(620, 30))) {
 						isGameStarted = true;
 
 						auto ws = randomHiraganaWordPair(5, 2);
@@ -182,17 +184,17 @@ void Main()
 
 				}
 
-				
+
 			}
 
 			//プレイヤー名
 
 			font(U"プレイヤーリスト").draw(300, 10);
-			for (auto [i,player] : Indexed(client.getLocalPlayers())) {
+			for (auto [i, player] : Indexed(client.getLocalPlayers())) {
 				if (client.getLocalPlayerID() == player.localID) {
 					font(player.userName + U"(自分)").draw(300, 40 + i * 30);
 				}
-				else{
+				else {
 					font(player.userName).draw(300, 40 + i * 30);
 				}
 			}
